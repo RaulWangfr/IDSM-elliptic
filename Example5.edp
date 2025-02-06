@@ -3,21 +3,19 @@ include "getARGV.idp"
 
 real noiseLevel = 0.1;
 real alpha = 0.1;
-int storeNum = 16;
+int storeNum = 22;
 string lowrank = getARGV("-lowrank", "BFG");
 
 verbosity = 0;
 real FemErr = 1e-9;
-real sigma = 1e-4;
 
 int dataNum = 1;
-func f0 = x^2 + 0.1;
-func f1 = y^2 + 0.1;
+func f0 = x;
+func f1 = y;
 
 func uIndicator = max(0.2000001^2 - (x-0.6)^2 - (y+0.1)^2,
-                      0.2000001 - max(abs(x+0.3), abs(y-0.2)),
-                      0.2000001 - max(abs(x+0.5), abs(y-0.2)));
-func uOrigin = 0.5* (abs(uIndicator)/uIndicator + 1);
+                      0.2000001^2 - (x+0.6)^2 - (y-0.2)^2);
+func uOrigin = 10* (abs(uIndicator)/uIndicator + 1)* (0.5* abs(x+1e-10)/x + 1.5);
 
 macro Grad(u)[dx(u), dy(u)]//
 
@@ -102,8 +100,13 @@ func int plotSave(string filename)
     }
     for(int i = 0; i < (uBoundaryNum - 1); i++)
     {
-        file << 1 << " " << uBoundaryX(i) << " " << uBoundaryY(i) << " " 
-             << 1 << " " << 0.0 << endl;
+        if(uBoundaryX(i) < 0.0){
+            file << 1 << " " << uBoundaryX(i) << " " << uBoundaryY(i) << " " 
+                << 1 << " " << 0.0 << endl;
+        }else{
+            file << 2 << " " << uBoundaryX(i) << " " << uBoundaryY(i) << " " 
+                << 1 << " " << 0.0 << endl;
+        }
     }
     return 0;
 }
@@ -112,41 +115,36 @@ fData[0] = f0;
 // fData[1] = f1;
 for(int k = 0; k < dataNum; k++)
 {
-
     P1solve unknown, p1test;
     problem PDEConstrain(unknown, p1test, solver = Cholesky)
-            = int2d(Th)(Grad(unknown)'* Grad(p1test)* (1 - (1 - sigma)* uOrigin))
-            + int2d(Th)(Grad(yOmega[k])'* Grad(p1test)* (1 - (1 - sigma)* uOrigin))
-            + int2d(Th)((1 - uOrigin)* square(yOmega[k])* yOmega[k]* p1test)
-            + int2d(Th)((1 - uOrigin)* 3* square(yOmega[k])* unknown* p1test)
-            + int2d(Th)(1e-3* unknown* p1test)
+            = int2d(Th)(Grad(unknown)'* Grad(p1test))
+            + int2d(Th)(unknown* p1test)
+            + int2d(Th)(uOrigin* abs(yOmega[k])* unknown* p1test)
             - int2d(Th)(fData[k]* p1test);
     while(true)
     {
         PDEConstrain;
-        yOmega[k] = yOmega[k] + unknown;
-        real err = sqrt(int2d(Th)(unknown^2));
+        real err = sqrt(int2d(Th)((unknown - yOmega[k])^2));
+        yOmega[k] = unknown;
         if(err < FemErr* 0.5){break;}
     }
 
     problem GuessEquation(unknown, p1test, solver = Cholesky)
-            = int2d(Th)(Grad(unknown)'* Grad(p1test)* (1 - (1 - sigma)* uGuess))
-            + int2d(Th)(Grad(yU[k])'* Grad(p1test)* (1 - (1 - sigma)* uGuess))
-            + int2d(Th)((1 - uGuess)* square(yU[k])* yU[k]* p1test)
-            + int2d(Th)((1 - uGuess)* 3* square(yU[k])* unknown* p1test)
-            + int2d(Th)(1e-3* unknown* p1test)
+            = int2d(Th)(Grad(unknown)'* Grad(p1test))
+            + int2d(Th)(unknown* p1test)
+            + int2d(Th)(uGuess* abs(yU[k])* unknown* p1test)
             - int2d(Th)(fData[k]* p1test);
     while(true)
     {
         GuessEquation;
-        yU[k] = yU[k] + unknown;
-        real err = sqrt(int2d(Th)(unknown^2));
+        real err = sqrt(int2d(Th)((unknown - yU[k])^2));
+        yU[k] = unknown;
         if(err < FemErr* 0.5){break;}
     }
 
     problem EmptyEquation(unknown, p1test, solver = Cholesky)
         = int2d(Th)(Grad(unknown)'* Grad(p1test))
-        + int2d(Th)(yU[k]^2* unknown* p1test)
+        + int2d(Th)(unknown* p1test)
         - int2d(Th)(fData[k]* p1test);
     EmptyEquation;
     yC[k] = unknown;
@@ -191,6 +189,7 @@ P0solve diagFunc;
                             +(ypos - 0.8* sin(2* pi* thetaIndex/ real(100)))^2) + 1e-10;
             diagFunc[](i) = min(diagFunc[](i), disI);
         }
+        diagFunc[](i) = diagFunc[](i)^1.0;
     }
 }
 real[int, int] sStore(P0solve.ndof, storeNum);
@@ -249,10 +248,10 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
     P0solve gradu = 0.0;
     for(int k = 0; k < dataNum; k++){
         P1solve unknown, p1test;
-        P1solve yErr = yData[k] - yC[k];
+        P1solve yErr = yC[k] - yData[k];
         problem DualEquation(unknown, p1test, solver = Cholesky)
                 = int2d(Th)(Grad(unknown)'* Grad(p1test))
-                + int2d(Th)(yU[k]^2* unknown* p1test)
+                + int2d(Th)(unknown* p1test)
                 + int1d(Th)(unknown* p1test/ alpha)
                 - int1d(Th)(yErr* p1test/ alpha);
         DualEquation;
@@ -260,22 +259,17 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
         yErr = yErr/sqrt(x^2 + y^2/ 0.8^2/ 0.8^2);
         DualEquation;
 
-        gradu = gradu + Grad(unknown)'* Grad(yU[k])* (1 - sigma) + yU[k]^3* unknown;
+        gradu = gradu + abs(yU[k])* yU[k]* unknown;
     }
+
     real[int] Atb = gradu[];
     gradu[] = Rsolver(Atb);
-    gradu = max(gradu, 0.0);
-    real[int] graduSort = gradu[];
-    graduSort.sort;
 
-    real tau1 = graduSort[int(graduSort.n* 0.99)];
-    real tau2 = graduSort[int(graduSort.n* 0.01)];
-    uGuess = 0.8* uGuess + 0.2* (gradu - tau2)/ (tau1 - tau2);
-    uGuess = max(min(uGuess, 1.0), 0.0);
+    uGuess = max(min(gradu, 50.0), 0.0);
 
     if(loopIndex % 5 == 1){
         pic = uGuess;
-        plotSave("Example4" + lowrank + loopIndex);
+        plotSave("Example5" + lowrank + loopIndex);
     }
 
     real residual = 0.0;
@@ -283,32 +277,23 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
     for(int k = 0; k < dataNum; k++){
         P1solve unknown, p1test;
         problem GuessEquation(unknown, p1test, solver = Cholesky)
-                = int2d(Th)(Grad(unknown)'* Grad(p1test)* (1 - (1 - sigma)* uGuess))
-                + int2d(Th)(Grad(yU[k])'* Grad(p1test)* (1 - (1 - sigma)* uGuess))
-                + int2d(Th)((1 - uGuess)* square(yU[k])* yU[k]* p1test)
-                + int2d(Th)((1 - uGuess)* 3* square(yU[k])* unknown* p1test)
-                + int2d(Th)(1e-3* unknown* p1test)
+                = int2d(Th)(Grad(unknown)'* Grad(p1test))
+                + int2d(Th)(unknown* p1test)
+                + int2d(Th)(uGuess* abs(yU[k])* unknown* p1test)
                 - int2d(Th)(fData[k]* p1test);
         while(true)
         {
             GuessEquation;
-            yU[k] = yU[k] + unknown;
-            real err = sqrt(int2d(Th)(unknown^2));
+            real err = sqrt(int2d(Th)((yU[k]-unknown)^2));
+            yU[k] = unknown;
             if(err < FemErr* 0.5){break;}
         }
         residual = residual + int1d(Th)((yU[k] - yData[k])^2);
 
-        problem EmptyEquation(unknown, p1test, solver = Cholesky)
-                = int2d(Th)(Grad(unknown)'* Grad(p1test))
-                + int2d(Th)(yU[k]^2* unknown* p1test)
-                - int2d(Th)(fData[k]* p1test);
-        EmptyEquation;
-        yC[k] = unknown;
-
-        P1solve yErr = yU[k] - yC[k];
+        P1solve yErr = yC[k] - yU[k];
         problem DualEquation(unknown, p1test, solver = Cholesky)
                 = int2d(Th)(Grad(unknown)'* Grad(p1test))
-                + int2d(Th)(yU[k]^2* unknown* p1test)
+                + int2d(Th)(unknown* p1test)
                 + int1d(Th)(unknown* p1test/ alpha)
                 - int1d(Th)(yErr* p1test/ alpha);
         DualEquation;
@@ -316,7 +301,7 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
         yErr = yErr/sqrt(x^2 + y^2/ 0.8^2/ 0.8^2);
         DualEquation;
 
-        Ax = Ax + Grad(yU[k])'* Grad(unknown)* (1 - sigma) + yU[k]^3* unknown;
+        Ax = Ax + abs(yU[k])* yU[k]* unknown;
     }
     {
         ofstream file("./residual.txt", append);

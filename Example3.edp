@@ -15,7 +15,7 @@ real cB = 0.01;
 real vA = 1e-10;
 real vB = 10.0;
 
-int dataNum = 2;
+int dataNum = 1;
 func f0 = x;
 func f1 = y;
 
@@ -164,7 +164,7 @@ func int plotSave(string filename)
 }
 
 fData[0] = f0;
-fData[1] = f1;
+// fData[1] = f1;
 
 for(int k = 0; k < dataNum; k++)
 {
