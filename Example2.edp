@@ -3,7 +3,7 @@ include "getARGV.idp"
 
 real noiseLevel = 0.1;
 real alpha = 0.1;
-int storeNum = 21;
+int storeNum = 22;
 string coef = "unkown";
 string type = "double";
 string lowrank = getARGV("-lowrank", "DFP");
@@ -172,21 +172,21 @@ for(int k = 0; k < dataNum; k++)
     problem PDEConstrain(unknown, p1test, solver = Cholesky)
             = int2d(Th)(cOrigin* Grad(unknown)'* Grad(p1test))
             + int2d(Th)(vOrigin* unknown* p1test)
-            - int2d(Th)(fData[k]* p1test);
+            - int1d(Th)(fData[k]* p1test);
     PDEConstrain;
     yOmega[k] = unknown;
 
     problem EmptyEquation(unknown, p1test, solver = Cholesky)
             = int2d(Th)(cA* Grad(unknown)'* Grad(p1test))
             + int2d(Th)(vA* unknown* p1test)
-            - int2d(Th)(fData[k]* p1test);
+            - int1d(Th)(fData[k]* p1test);
     EmptyEquation;
     yC[k] = unknown;
 
     problem GuessEquation(unknown, p1test, solver = Cholesky)
             = int2d(Th)(cGuess* Grad(unknown)'* Grad(p1test))
             + int2d(Th)(vGuess* unknown* p1test)
-            - int2d(Th)(fData[k]* p1test);
+            - int1d(Th)(fData[k]* p1test);
     GuessEquation;
     yU[k] = unknown;
 
@@ -348,7 +348,7 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
         problem GuessEquation(unknown, p1test, solver = Cholesky)
                 = int2d(Th)(cGuess* Grad(unknown)'* Grad(p1test))
                 + int2d(Th)(vGuess* unknown* p1test)
-                - int2d(Th)(fData[k]* p1test);
+                - int1d(Th)(fData[k]* p1test);
         GuessEquation;
         yU[k] = unknown;
         residual = residual + int1d(Th)((yU[k] - yData[k])^2);

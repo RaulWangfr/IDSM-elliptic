@@ -168,27 +168,69 @@ fData[0] = f0;
 
 for(int k = 0; k < dataNum; k++)
 {
-    P1solve unknown, p1test, yOld;
-    problem PDEConstrain(unknown, p1test, solver = Cholesky)
-            = int2d(Th)(cOrigin* Grad(unknown)'* Grad(p1test))
-            + int2d(Th)(vOrigin* unknown* p1test)
-            - int2d(Th)(fData[k]* p1test);
-    PDEConstrain;
-    yOmega[k] = unknown;
+    {
+        varf Au(u, v) = int2d(Th)(cOrigin* Grad(u)'* Grad(v))
+                      + int2d(Th)(vOrigin* u* v);
+        varf fTerm(u, v) = int1d(Th)(fData[k]* v);
+        varf bTerm(u, v) = int1d(Th)(1.* v);
 
-    problem EmptyEquation(unknown, p1test, solver = Cholesky)
-            = int2d(Th)(cA* Grad(unknown)'* Grad(p1test))
-            + int2d(Th)(vA* unknown* p1test)
-            - int2d(Th)(fData[k]* p1test);
-    EmptyEquation;
-    yC[k] = unknown;
+        matrix A = Au(P1solve, P1solve);
+        real[int] b = fTerm(0, P1solve);
+        real[int] B = bTerm(0, P1solve);
 
-    problem GuessEquation(unknown, p1test, solver = Cholesky)
-            = int2d(Th)(cGuess* Grad(unknown)'* Grad(p1test))
-            + int2d(Th)(vGuess* unknown* p1test)
-            - int2d(Th)(fData[k]* p1test);
-    GuessEquation;
-    yU[k] = unknown;
+        matrix AA = [[A,B],[B',0]];
+        set(AA, solver = sparsesolver);
+
+        real[int] bb(P1solve.ndof + 1), xx(P1solve.ndof + 1), b1(1), l(1);
+        b1 = 0;
+        bb = [b, b1];
+
+        xx = AA^-1* bb;
+
+        [yOmega[k][], l] = xx;
+    }
+    {
+        varf Au(u, v) = int2d(Th)(cA* Grad(u)'* Grad(v))
+                      + int2d(Th)(vA* u* v);
+        varf fTerm(u, v) = int1d(Th)(fData[k]* v);
+        varf bTerm(u, v) = int1d(Th)(1.* v);
+
+        matrix A = Au(P1solve, P1solve);
+        real[int] b = fTerm(0, P1solve);
+        real[int] B = bTerm(0, P1solve);
+
+        matrix AA = [[A,B],[B',0]];
+        set(AA, solver = sparsesolver);
+
+        real[int] bb(P1solve.ndof + 1), xx(P1solve.ndof + 1), b1(1), l(1);
+        b1 = 0;
+        bb = [b, b1];
+
+        xx = AA^-1* bb;
+
+        [yC[k][], l] = xx;
+    }
+    {
+        varf Au(u, v) = int2d(Th)(cGuess* Grad(u)'* Grad(v))
+                      + int2d(Th)(vGuess* u* v);
+        varf fTerm(u, v) = int1d(Th)(fData[k]* v);
+        varf bTerm(u, v) = int1d(Th)(1.* v);
+
+        matrix A = Au(P1solve, P1solve);
+        real[int] b = fTerm(0, P1solve);
+        real[int] B = bTerm(0, P1solve);
+
+        matrix AA = [[A,B],[B',0]];
+        set(AA, solver = sparsesolver);
+
+        real[int] bb(P1solve.ndof + 1), xx(P1solve.ndof + 1), b1(1), l(1);
+        b1 = 0;
+        bb = [b, b1];
+
+        xx = AA^-1* bb;
+
+        [yU[k][], l] = xx;
+    }
 
     for(int i = 0; i < P1solve.ndof; i++){
         real noise = (2.0* randreal2() - 1.0)* noiseLevel;
@@ -216,9 +258,9 @@ real[int] diagFunc(P0solve.ndof* 2);
         real ypos = p0y[][i];
         func dis = sqrt((x - xpos)^2 + (y - ypos)^2) + 1e-10;
         diagFunc(i + 0* P0solve.ndof) = 1/
-        ((int1d(Th)(gslsfbesselKn(0, sqrt(vA/ cA)* dis)^2))^0.5);
+        ((int1d(Th)(1/dis^2.0))^0.5);
         diagFunc(i + 1* P0solve.ndof) = 1/
-        ((int1d(Th)(gslsfbesselKn(1, sqrt(vA/ cA)* dis)^2))^1.0);
+        ((int1d(Th)(1/dis^2.0))^1.5);
     }
 }
 real[int, int] sStore(P0solve.ndof* 2, storeNum);
@@ -342,7 +384,7 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
         problem GuessEquation(unknown, p1test, solver = Cholesky)
                 = int2d(Th)(cGuess* Grad(unknown)'* Grad(p1test))
                 + int2d(Th)(vGuess* unknown* p1test)
-                - int2d(Th)(fData[k]* p1test);
+                - int1d(Th)(fData[k]* p1test);
         GuessEquation;
         yU[k] = unknown;
         residual = residual + int1d(Th)((yU[k] - yData[k])^2);
