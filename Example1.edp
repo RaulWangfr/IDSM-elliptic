@@ -380,13 +380,27 @@ for(int loopIndex = 0; loopIndex < storeNum; loopIndex++)
     P0solve Axc = 0.0;
     P0solve Axv = 0.0;
     for(int k = 0; k < dataNum; k++){
-        P1solve unknown, p1test;
-        problem GuessEquation(unknown, p1test, solver = Cholesky)
-                = int2d(Th)(cGuess* Grad(unknown)'* Grad(p1test))
-                + int2d(Th)(vGuess* unknown* p1test)
-                - int1d(Th)(fData[k]* p1test);
-        GuessEquation;
-        yU[k] = unknown;
+        {
+            varf Au(u, v) = int2d(Th)(cGuess* Grad(u)'* Grad(v))
+                        + int2d(Th)(vGuess* u* v);
+            varf fTerm(u, v) = int1d(Th)(fData[k]* v);
+            varf bTerm(u, v) = int1d(Th)(1.* v);
+
+            matrix A = Au(P1solve, P1solve);
+            real[int] b = fTerm(0, P1solve);
+            real[int] B = bTerm(0, P1solve);
+
+            matrix AA = [[A,B],[B',0]];
+            set(AA, solver = sparsesolver);
+
+            real[int] bb(P1solve.ndof + 1), xx(P1solve.ndof + 1), b1(1), l(1);
+            b1 = 0;
+            bb = [b, b1];
+
+            xx = AA^-1* bb;
+
+            [yU[k][], l] = xx;
+        }
         residual = residual + int1d(Th)((yU[k] - yData[k])^2);
 
         P0solve yErr = yU[k] - yC[k];
